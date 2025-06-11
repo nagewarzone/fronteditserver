@@ -63,18 +63,34 @@ th, td {
       z-index: 20;
       border-right: 1px solid #ccc;
     }
-    th.lock-col-3, td.lock-col-3 {
-      width: 150px;
-      min-width: 150px;
-      position: sticky;
-      left: 150px;
-      background: #fff;
-      z-index: 10;
-      border-right: 1px solid #ccc;
-    }
-    #itemBody tr:hover {
-      background-color: #bba85e;
-    }
+   th.lock-col-3,
+td.lock-col-3 {
+  width: 150px;
+  min-width: 150px;
+  position: sticky;
+  left: 150px;
+  background: #fff;
+  z-index: 10;
+  border-right: 1px solid #ccc;
+
+  /* เพิ่มขนาดตัวหนังสือ + ตัวหนา */
+  font-size: 13px;      /* ปรับตามต้องการ เช่น 16px หรือ 18px */
+  font-weight: bold;
+}
+td.lock-col-3 input {
+  font-size: 13px;
+  font-weight: bold;
+}
+
+   #itemBody tr:hover {
+  background-color: #bba85e;
+}
+
+#itemBody tr:hover td.lock-col-1,
+#itemBody tr:hover td.lock-col-2,
+#itemBody tr:hover td.lock-col-3 {
+  background-color: #bba85e;
+}
     button:disabled {
       opacity: 0.5;
       cursor: not-allowed;
