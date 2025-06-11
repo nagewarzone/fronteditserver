@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Item Info Viewer</title>
+  <style>
+    table {
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: auto; /* ให้หัวตารางกำหนดความกว้าง */
+}
+
+th, td {
+  border: 1px solid #ccc;
+  padding: 4px;
+  text-align: left;
+}
+    thead th {
+      position: sticky;
+      top: 0;
+      background: #f1f1f1;
+      z-index: 10;
+    }
+   td input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12px;
+  padding: 2px 4px;
+  border: none;
+  background: transparent;
+}
+    #searchInput {
+      font-size: 16px;
+      padding: 8px 12px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      width: 250px;
+      box-sizing: border-box;
+    }
+    button {
+      font-size: 16px;
+      padding: 8px 16px;
+      margin-left: 6px;
+      border-radius: 4px;
+      border: 1px solid #aaa;
+      cursor: pointer;
+    }
+    th.lock-col-1, td.lock-col-1 {
+      width: 50px;
+      min-width: 50px;
+      position: sticky;
+      left: 0;
+      background: #f9f9f9;
+      z-index: 30;
+      border-right: 1px solid #ccc;
+    }
+    th.lock-col-2, td.lock-col-2 {
+      width: 100px;
+      min-width: 100px;
+      position: sticky;
+      left: 50px;
+      background: #fdfdfd;
+      z-index: 20;
+      border-right: 1px solid #ccc;
+    }
+    th.lock-col-3, td.lock-col-3 {
+      width: 150px;
+      min-width: 150px;
+      position: sticky;
+      left: 150px;
+      background: #fff;
+      z-index: 10;
+      border-right: 1px solid #ccc;
+    }
+    #itemBody tr:hover {
+      background-color: #bba85e;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .loading {
+      font-style: italic;
+      margin: 50px 0;
+    }
+    .scroll-wrapper {
+      margin-top: 40px;
+      height: 700px;
+      overflow-x: auto;
+    }
+    #loginScreen {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    #loginBox {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 8px #00000088;
+      text-align: center;
+      min-width: 280px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Login screen -->
+  <div id="loginScreen">
+    <div id="loginBox">
+      <input type="password" id="passwordInput" placeholder="รหัสผ่าน" />
+      <button id="loginBtn">เข้าสู่ระบบ</button>
+      <p id="loginError" style="color: red; margin-top: 8px;"></p>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div style="padding: 20px; display:none;" id="mainContent">
+    <h2>
+      Search Items (Page <span id="currentPage">1</span> / <span id="totalPages">?</span>)
+      <button id="logoutBtn">Logout</button>
+    </h2>
+
+    <input type="text" id="searchInput" placeholder="ค้นหาไอเท็ม..." />
+    <button id="searchBtn" disabled>ค้นหา</button>
+    <button id="prevPage" disabled>Previous</button>
+    <button id="nextPage" disabled>Next</button>
+    <button id="saveAllBtn" disabled style="margin-top: 12px;">บันทึกทั้งหมด</button>
+
+    <div class="scroll-wrapper">
+      <table border="1" id="itemTable">
+        <thead id="itemHead"></thead>
+        <tbody id="itemBody"></tbody>
+      </table>
+    </div>
+
+  
+    <div id="loadingIndicator" class="loading" style="display:none;">กำลังโหลดข้อมูล...</div>
+  </div>
+
+  <script>
+    // Elements
+    const loginScreen = document.getElementById('loginScreen');
+    const loginBtn = document.getElementById('loginBtn');
+    const passwordInput = document.getElementById('passwordInput');
+    const loginError = document.getElementById('loginError');
+    const mainContent = document.getElementById('mainContent');
+
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const prevPageBtn = document.getElementById('prevPage');
+    const nextPageBtn = document.getElementById('nextPage');
+    const saveAllBtn = document.getElementById('saveAllBtn');
+
+    const currentPageEl = document.getElementById('currentPage');
+    const totalPagesEl = document.getElementById('totalPages');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const itemHead = document.getElementById('itemHead');
+    const itemBody = document.getElementById('itemBody');
+
+    let currentPage = 1;
+    let totalPages = 1;
+    let currentSearch = '';
+
+    // Snapshot data for detecting changes
+    const originalData = {};
+
+    // Disable controls before login
+    function setControlsEnabled(enabled) {
+      searchBtn.disabled = !enabled;
+      prevPageBtn.disabled = !enabled;
+      nextPageBtn.disabled = !enabled;
+      saveAllBtn.disabled = !enabled;
+      searchInput.disabled = !enabled;
+    }
+    setControlsEnabled(false);
+
+    // Show/hide loading
+    function setLoading(loading) {
+      loadingIndicator.style.display = loading ? 'block' : 'none';
+    }
+
+    // Update pagination buttons state
+    function updatePaginationButtons() {
+      prevPageBtn.disabled = currentPage <= 1;
+      nextPageBtn.disabled = currentPage >= totalPages;
+    }
+
+    // Fetch items data with optional page and search
+    async function fetchItems(page = 1, search = '') {
+  const token = localStorage.getItem('authToken');
+  if (!token) {
+    alert('กรุณาล็อกอินก่อนทำรายการ');
+    return;
+  }
+
+  currentPage = page;
+  currentSearch = search;
+  currentPageEl.textContent = currentPage;
+  setLoading(true);
+
+  let url = `https://editserverbackend.onrender.com/api/items?page=${page}`;
+  if (search.trim() !== '') {
+    url += `&search=${encodeURIComponent(search)}`;
+  }
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!res.ok) throw new Error('Network response was not ok');
+    const data = await res.json();
+
+    totalPages = data.totalPages || 1;
+    totalPagesEl.textContent = totalPages;
+
+    const items = Array.isArray(data.items) ? data.items : data;
+
+    // Clear table
+    itemHead.innerHTML = '';
+    itemBody.innerHTML = '';
+
+    if (!items.length) {
+      const keys = data.items && data.items.length > 0 ? Object.keys(data.items[0]) : [];
+      const colspan = keys.length || 1;
+      itemBody.innerHTML = `<tr><td colspan="${colspan}">ไม่พบข้อมูล</td></tr>`;
+      updatePaginationButtons();
+      return;
+    }
+
+       // Determine visible keys (columns)
+const keys = Object.keys(items[0]);
+const visibleKeys = keys.filter(key =>
+  items.some(row => {
+    const val = row[key];
+    if (typeof val === 'number') return val > 0;
+    return val != null && val !== '';
+  })
+);
+
+
+
+        // Save snapshot of original data for change detection
+        items.forEach(row => {
+          originalData[row.ItemID] = { ...row };
+        });
+
+        // Render header row
+        const headerRow = document.createElement('tr');
+        visibleKeys.forEach((key, i) => {
+          const th = document.createElement('th');
+          th.textContent = key;
+          th.classList.add(`lock-col-${i + 1}`);
+          headerRow.appendChild(th);
+        });
+        itemHead.appendChild(headerRow);
+
+       // Render body rows
+items.forEach(row => {
+  const tr = document.createElement('tr');
+  tr.dataset.itemid = row.ItemID;
+  tr.dataset.rownum = row.RowNum;
+
+  visibleKeys.forEach((key, i) => {
+    const td = document.createElement('td');
+    td.classList.add(`lock-col-${i + 1}`);
+
+    if (key === 'RowNum' || key === 'ItemID') {
+      td.textContent = row[key];
+    } else {
+      const val = row[key] || '';
+      td.innerHTML = `<input type="text" name="${key}" value="${val}" />`;
+    }
+
+    tr.appendChild(td);
+  });
+
+  itemBody.appendChild(tr);
+});
+
+        updatePaginationButtons();
+      } catch (error) {
+    console.error('Fetch items error:', error);
+    // แสดงข้อความ error ใน UI หรือจัดการตามต้องการ
+  } finally {
+    setLoading(false);
+  }
+}
+
+    // Save only changed rows
+    async function saveAllChanges() {
+  const saveBtn = document.getElementById('saveAllBtn');
+  saveBtn.disabled = true; // 🔒 ปิดปุ่มไม่ให้กดซ้ำ
+
+  const rows = Array.from(itemBody.querySelectorAll('tr'));
+  const updates = [];
+
+  rows.forEach(tr => {
+    const id = Number(tr.dataset.itemid);
+    const orig = originalData[id];
+    if (!orig) return;
+
+    const obj = { ItemID: id };
+    let changed = false;
+
+    const inputs = tr.querySelectorAll('input');
+    inputs.forEach(input => {
+      const field = input.name;
+      let newVal = input.value.trim();
+
+      if (newVal !== '') {
+        if (!isNaN(newVal) && !isNaN(parseFloat(newVal))) {
+          newVal = newVal.includes('.') ? parseFloat(newVal) : parseInt(newVal, 10);
+        }
+      }
+
+      const oldVal = orig[field] == null ? '' : String(orig[field]);
+
+      if (String(newVal) !== oldVal) {
+        obj[field] = newVal;
+        changed = true;
+      }
+    });
+
+    if (changed) updates.push(obj);
+  });
+
+  if (!updates.length) {
+    alert('ไม่มีข้อมูลใดเปลี่ยนแปลง');
+    saveBtn.disabled = false; // 🔓 เปิดปุ่มกลับ ถ้าไม่มีข้อมูลเปลี่ยน
+    return;
+  }
+
+  try {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      alert('กรุณาล็อกอินก่อนทำรายการ');
+      return;
+    }
+
+    const res = await fetch('https://editserverbackend.onrender.com/api/items/updateBatch', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ updates }),
+    });
+
+    if (!res.ok) throw new Error('Network response was not ok');
+    alert('บันทึกข้อมูลเรียบร้อยแล้ว');
+    await fetchItems(currentPage, currentSearch);
+  } catch (error) {
+    console.error(error);
+    alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+  } finally {
+    saveBtn.disabled = false; // 🔓 เปิดปุ่มกลับเมื่อทำงานเสร็จ ไม่ว่าผลลัพธ์จะเป็นยังไง
+  }
+}
+
+
+    // Login function
+    async function checkPassword() {
+  const password = passwordInput.value.trim();
+  if (!password) {
+    loginError.textContent = 'กรุณากรอกรหัสผ่าน';
+    return;
+  }
+
+  loginError.textContent = '';
+  loginBtn.disabled = true;
+  passwordInput.disabled = true;
+
+  try {
+    const response = await fetch('https://editserverbackend.onrender.com/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+
+    if (!response.ok) throw new Error('ล็อกอินล้มเหลว');
+
+    const data = await response.json();
+    console.log('Login response:', data); // debug
+
+    if (data.success) {
+      if (data.token) {
+        localStorage.setItem('authToken', data.token);
+      }
+      loginScreen.style.display = 'none';
+      mainContent.style.display = 'block';
+      setControlsEnabled(true);
+      fetchItems(1, '');
+    } else {
+      loginError.textContent = 'รหัสผ่านไม่ถูกต้อง';
+      loginBtn.disabled = false;
+      passwordInput.disabled = false;
+    }
+  } catch (error) {
+    loginError.textContent = 'เกิดข้อผิดพลาดในการล็อกอิน';
+    loginBtn.disabled = false;
+    passwordInput.disabled = false;
+  }
+}
+
+    // Event listeners
+    loginBtn.addEventListener('click', checkPassword);
+    passwordInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        checkPassword();
+      }
+    });
+
+    searchBtn.addEventListener('click', () => {
+      fetchItems(1, searchInput.value);
+    });
+
+    prevPageBtn.addEventListener('click', () => {
+      if (currentPage > 1) fetchItems(currentPage - 1, currentSearch);
+    });
+
+    nextPageBtn.addEventListener('click', () => {
+      if (currentPage < totalPages) fetchItems(currentPage + 1, currentSearch);
+    });
+
+    saveAllBtn.addEventListener('click', saveAllChanges);
+
+    // Enable search button only when input has value
+    searchInput.addEventListener('input', () => {
+      searchBtn.disabled = searchInput.value.trim() === '';
+    });
+
+  
+  const logoutBtn = document.getElementById('logoutBtn');
+
+logoutBtn.addEventListener('click', () => {
+  // ลบ token ออกจาก localStorage
+  localStorage.removeItem('authToken');
+
+  // รีเซ็ต input รหัสผ่าน
+  passwordInput.value = '';
+  loginError.textContent = '';
+  loginBtn.disabled = false;
+  passwordInput.disabled = false;
+
+  // ซ่อน main content
+  mainContent.style.display = 'none';
+
+  // แสดงหน้าล็อกอิน
+  loginScreen.style.display = 'flex';
+
+  // ปิดปุ่มและ input ต่างๆ ใน main content
+  setControlsEnabled(false);
+
+  // เคลียร์ข้อมูลตารางและสถานะ pagination
+  itemHead.innerHTML = '';
+  itemBody.innerHTML = '';
+  currentPage = 1;
+  totalPages = 1;
+  currentPageEl.textContent = currentPage;
+  totalPagesEl.textContent = '?';
+  searchInput.value = '';
+  searchBtn.disabled = true;
+  prevPageBtn.disabled = true;
+  nextPageBtn.disabled = true;
+  saveAllBtn.disabled = true;
+
+  alert('ออกจากระบบเรียบร้อยแล้ว');
+});
+
+    // เช็คตอนโหลดหน้าเว็บว่ามี token ไหม ถ้ามีให้ข้ามหน้า login ไปหน้า main เลย
+window.addEventListener('load', () => {
+  const token = localStorage.getItem('authToken');
+  if (token) {
+    loginScreen.style.display = 'none';
+    mainContent.style.display = 'block';
+    setControlsEnabled(true);
+    fetchItems(1, '');
+  }
+});
+
+  </script>
+</body>
+</html>
