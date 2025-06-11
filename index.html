@@ -314,7 +314,24 @@ items.forEach(row => {
       td.textContent = row[key];
     } else {
       const val = row[key] || '';
-      td.innerHTML = `<input type="text" name="${key}" value="${val}" />`;
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.name = key;
+      input.value = val;
+
+      // เพิ่มไฮไลท์เมื่อมีการแก้ไขค่า
+      input.addEventListener('input', () => {
+        if (input.value !== val) {
+          input.style.backgroundColor = '#ffff99';  // สีเหลืองอ่อน
+          input.style.fontWeight = 'bold';
+        } else {
+          input.style.backgroundColor = 'transparent';
+          input.style.fontWeight = 'normal';
+        }
+      });
+
+      td.appendChild(input);
     }
 
     tr.appendChild(td);
