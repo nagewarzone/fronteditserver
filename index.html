@@ -137,6 +137,9 @@ td.lock-col-3 input {
   <div style="padding: 20px; display:none;" id="mainContent">
     <h2>
       Search Items (Page <span id="currentPage">1</span> / <span id="totalPages">?</span>)
+       <input type="number" id="jumpPageInput" placeholder="วาปไปหน้า..." style="width: 80px;" min="1" />
+<button id="jumpPageBtn">วาป !</button>
+
       <button id="logoutBtn">Logout</button>
     </h2>
 
@@ -144,6 +147,7 @@ td.lock-col-3 input {
     <button id="searchBtn" disabled>ค้นหา</button>
     <button id="prevPage" disabled>Previous</button>
     <button id="nextPage" disabled>Next</button>
+   
     <button id="saveAllBtn" disabled style="margin-top: 12px;">บันทึกทั้งหมด</button>
 
     <div class="scroll-wrapper">
@@ -498,6 +502,16 @@ window.addEventListener('load', () => {
     mainContent.style.display = 'block';
     setControlsEnabled(true);
     fetchItems(1, '');
+  }
+});
+document.getElementById('jumpPageBtn').addEventListener('click', () => {
+  const pageInput = document.getElementById('jumpPageInput');
+  const pageNum = parseInt(pageInput.value, 10);
+
+  if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+    fetchItems(pageNum, currentSearch);
+  } else {
+    alert(`กรุณาใส่หมายเลขหน้าระหว่าง 1 ถึง ${totalPages}`);
   }
 });
 
